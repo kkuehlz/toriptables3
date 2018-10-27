@@ -45,15 +45,7 @@ class TorIptables(object):
         )
         self.tor_uid = self._get_tor_uid()
         self.trans_port = "9040"  # Tor port
-        self.tor_config_file = "/etc/tor/torrc"
-        self.torrc = f"""
-## Inserted by {NAME} {VERSION}
-## Transparently route all traffic through Tor on port {self.local_dns_port}
-VirtualAddrNetwork {self.virtual_net_addr}
-AutomapHostsOnResolve 1
-TransPort {self.trans_port} 
-DNSPort {self.local_dns_port} 
-"""
+        self.torrc = "/etc/tor/torrc"
 
     def _get_tor_uid(self):
         uids = frozenset({"tor", "debian-tor"})
@@ -64,6 +56,29 @@ DNSPort {self.local_dns_port}
             except KeyError:
                 pass
         return tor_uid
+
+    def mod_config(self):
+        torrc_iptables_rules = f"""
+## DO NOT MODIFY!!
+## Inserted by {NAME}, version {VERSION} for Tor iptables rules
+## Transparently route all traffic through Tor on port {self.trans_port}
+VirtualAddrNetwork {self.virtual_net_addr}
+AutomapHostsOnResolve 1
+TransPort {self.trans_port} 
+DNSPort {self.local_dns_port} 
+"""
+        need_mod = True
+        with open(self.torrc, "r") as tor_conf:
+            needs_mod = not any(
+                [
+                    f"## Inserted by {NAME}, version {VERSION} for Tor iptables rules"
+                    in line
+                    for line in tor_conf.readlines()
+                ]
+            )
+        if needs_mod:
+            with open(self.torrc, "a+") as tor_conf:
+                tor_conf.write(torrc_iptables_rules)
 
     def flush_iptables_rules(self):
         """Flush iptables rules and NAT rules"""
@@ -284,11 +299,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    load_tables = TorIptables()
-    if isfile(load_tables.tor_config_file):
-        if not "VirtualAddrNetwork" in open(load_tables.tor_config_file).read():
-            with open(load_tables.tor_config_file, "a+") as torrconf:
-                torrconf.write(load_tables.torrc)
+    tor_iptables = TorIptables()
+    tor_iptables.mod_config()
 
     if args.load:
         load_tables.load_iptables_rules()
