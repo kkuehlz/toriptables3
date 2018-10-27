@@ -26,6 +26,12 @@ NAME = "toriptables3"
 VERSION = "0.0.1"
 
 
+class Colors(object):
+    DEFAULT = "\033[0m"
+    ORANGE = "\033[91m"
+    PINK = "\033[92m"
+
+
 class TorIptables(object):
     def __init__(self):
         self.default_dns_port = "53"
@@ -96,14 +102,18 @@ DNSPort {self.local_dns_port}
                     ["systemctl", "restart", "tor"], stdout=DEVNULL, stderr=DEVNULL
                 )
                 if status != 0:
-                    print("\033[91m[!] Could not restart Tor!")
+                    print(f"{Colors.ORANGE}[!] Could not restart Tor!")
                     return
 
             except CalledProcessError as err:
-                print("\033[91m[!] Command failed: {err.cmd}\033[0m")
+                print(f"{Colors.ORANGE}[!] Command failed: {err.cmd}{Colors.DEFAULT}")
 
-            print("  [\033[92m+\033[0m] Anonymizer status \033[92m[ON]\033[0m")
-            print("  [\033[92m*\033[0m] Getting public IP, please wait...")
+            print(
+                f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[ON]{Colors.DEFAULT}"
+            )
+            print(
+                f"  [{Colors.ORANGE}*{Colors.DEFAULT}] Getting public IP, please wait..."
+            )
             # retries = 0
             # my_public_ip = None
             # while retries < 12 and not my_public_ip:
@@ -119,7 +129,7 @@ DNSPort {self.local_dns_port}
             #    exit(" \033[91m[!]\033[0m Can't get public ip address!")
             # print(
             #    " {0}".format(
-            #        "[\033[92m+\033[0m] Your IP is \033[92m%s\033[0m" % my_public_ip
+            #        "[Colors.ORANGE+\033[0m] Your IP is Colors.ORANGE%s\033[0m" % my_public_ip
             #    )
             # )
 
@@ -209,7 +219,7 @@ DNSPort {self.local_dns_port}
             ]
         )
 
-        for net in self.tor_no_forward:
+        for subnet in self.tor_no_forward:
             call(
                 [
                     "iptables",
@@ -218,7 +228,7 @@ DNSPort {self.local_dns_port}
                     "-A",
                     "OUTPUT",
                     "-d",
-                    str(net),
+                    str(subnet),
                     "-j",
                     "RETURN",
                 ]
@@ -255,8 +265,8 @@ DNSPort {self.local_dns_port}
             ]
         )
 
-        for net in self.tor_no_forward:
-            call(["iptables", "-A", "OUTPUT", "-d", str(net), "-j", "ACCEPT"])
+        for subnet in self.tor_no_forward:
+            call(["iptables", "-A", "OUTPUT", "-d", str(subnet), "-j", "ACCEPT"])
 
         call(
             [
@@ -303,10 +313,12 @@ if __name__ == "__main__":
     tor_iptables.mod_config()
 
     if args.load:
-        load_tables.load_iptables_rules()
+        tor_iptables.load_iptables_rules()
     elif args.flush:
-        load_tables.flush_iptables_rules()
-        print("  [\033[93m!\033[0m] Anonymizer status \033[91m[OFF]\033[0m")
+        tor_iptables.flush_iptables_rules()
+        print(
+            f"  [{Colors.PINK}!{Colors.DEFAULT} Anonymizer status {Colors.ORANGE}[OFF]{Colors.DEFAULT}"
+        )
     else:
         # TODO: transient mode
         parser.print_help()
