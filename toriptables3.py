@@ -8,22 +8,24 @@ that sets up iptables and tor to route all services
 and traffic including DNS through the tor network.
 """
 
-from subprocess import call, check_call, CalledProcessError
-from subprocess import DEVNULL
+from argparse import ArgumentParser
+from atexit import register
 from os.path import isfile, basename
 from os import devnull
 from os import geteuid
 from pwd import getpwnam
+from subprocess import call, check_call, CalledProcessError
+from subprocess import DEVNULL
 from sys import stdout, stderr
-from atexit import register
-from argparse import ArgumentParser
-from json import load
 
-# from urllib2 import urlopen, URLError
+from requests import ConnectionError
+from requests import get
 from time import sleep
 
 NAME = "toriptables3"
 VERSION = "0.0.1"
+
+URI_TOR_CHECK = "https://check.torproject.org/"
 
 
 class Colors(object):
@@ -107,31 +109,6 @@ DNSPort {self.local_dns_port}
 
             except CalledProcessError as err:
                 print(f"{Colors.ORANGE}[!] Command failed: {err.cmd}{Colors.DEFAULT}")
-
-            print(
-                f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[ON]{Colors.DEFAULT}"
-            )
-            print(
-                f"  [{Colors.ORANGE}*{Colors.DEFAULT}] Getting public IP, please wait..."
-            )
-            # retries = 0
-            # my_public_ip = None
-            # while retries < 12 and not my_public_ip:
-            #    retries += 1
-            #    try:
-            #        my_public_ip = load(urlopen("http://ident.me/.json"))["address"]
-            #    except URLError:
-            #        sleep(5)
-            #        print(" [\033[93m?\033[0m] Still waiting for IP address...")
-            # if not my_public_ip:
-            #    my_public_ip = getoutput("wget -qO - v4.ifconfig.co")
-            # if not my_public_ip:
-            #    exit(" \033[91m[!]\033[0m Can't get public ip address!")
-            # print(
-            #    " {0}".format(
-            #        "[Colors.ORANGE+\033[0m] Your IP is Colors.ORANGE%s\033[0m" % my_public_ip
-            #    )
-            # )
 
         # See https://trac.torproject.org/projects/tor/wiki/doc/TransparentProxy#WARNING
         # See https://lists.torproject.org/pipermail/tor-talk/2014-March/032503.html
@@ -283,13 +260,42 @@ DNSPort {self.local_dns_port}
         )
         call(["iptables", "-A", "OUTPUT", "-j", "REJECT"])
 
-    def check_tor_connect():
+    def check_tor_connect(self):
+        connected_msg = "Congratulations. This browser is configured to use Tor."
+        retries = 0
+        my_public_ip = None
+        while retries < 12:
+            try:
+                r = get(URI_TOR_CHECK)
+                if r.status_code == 200 and any(
+                    [connected_msg in line for line in r.text.splitlines()]
+                ):
+                    ip = filter(lambda x: "IP" in x, r.text.splitlines())
+                    my_public_ip = next(ip, None)
+                    break
+            except ConnectionError:
+                pass
+            print(f" [{Colors.PINK}?{Colors.DEFAULT}] Still waiting for IP address...")
+            sleep(3)
+            retries += 1
+
+        return my_public_ip
+        if not my_public_ip:
+            my_public_ip = getoutput("wget -qO - v4.ifconfig.co")
+        if not my_public_ip:
+            exit(" \033[91m[!]\033[0m Can't get public ip address!")
+        print(
+            " {0}".format(
+                "[Colors.ORANGE+\033[0m] Your IP is Colors.ORANGE%s\033[0m"
+                % my_public_ip
+            )
+        )
         pass
 
 
 if __name__ == "__main__":
     if geteuid() != 0:
-        print("[!] Needs to be run as super user. Quitting")
+        print("[!] Needs to be run as root. Quitting")
         exit(1)
 
     parser = ArgumentParser(
@@ -314,11 +320,24 @@ if __name__ == "__main__":
 
     if args.load:
         tor_iptables.load_iptables_rules()
+        print(f"  [{Colors.ORANGE}*{Colors.DEFAULT}] Getting public IP, please wait...")
+        public_ip = tor_iptables.check_tor_connect()
+        if public_ip is None:
+            print(f" {Colors.ORANGE}[!]{Colors.DEFAULT} Can't get public ip address!")
+            exit(1)
+        print(
+            f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Your IP is {Colors.ORANGE}{public_ip}\033[0m"
+        )
+        print(
+            f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[ON]{Colors.DEFAULT}"
+        )
     elif args.flush:
         tor_iptables.flush_iptables_rules()
+
         print(
-            f"  [{Colors.PINK}!{Colors.DEFAULT} Anonymizer status {Colors.ORANGE}[OFF]{Colors.DEFAULT}"
+            f"  [{Colors.PINK}!{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[OFF]{Colors.DEFAULT}"
         )
+
     else:
         # TODO: transient mode
         parser.print_help()
