@@ -303,7 +303,7 @@ def main():
         exit(1)
 
     parser = ArgumentParser(
-        description="Tor Iptables script for loading and unloading iptables rules"
+        description="iptables rules to route all traffic through tor"
     )
     parser.add_argument(
         "-l",

@@ -1,6 +1,9 @@
-# toriptables2
+# toriptables3
 
 Tor Iptables script is an anonymizer that sets up iptables and tor to route all services and traffic including DNS through the Tor network.
+
+This is a rewrite of [toriptables2](https://github.com/ruped24/toriptables2) for `python3`. New features include a "transient mode",
+so that your old iptables rules are restored when the process exits, and ip verification is now done via check.torproject.org.
 
 #### Dependencies:
 tor
