@@ -10,17 +10,13 @@ and traffic including DNS through the tor network.
 
 from argparse import ArgumentParser
 from atexit import register
-from os.path import isfile, basename
-from os import devnull
-from os import geteuid
+from os import devnull, geteuid
+from os.path import basename, isfile
 from pwd import getpwnam
-from subprocess import call, check_call, CalledProcessError
-from subprocess import DEVNULL
-from sys import stdout, stderr
+from subprocess import DEVNULL, CalledProcessError, call, check_call
+from sys import stderr, stdout
 
-from utils import Colors
-from utils import check_tor_connect
-
+from utils import Colors, check_tor_connect
 
 NAME = "toriptables3"
 VERSION = "0.0.1"
@@ -252,7 +248,7 @@ DNSPort {self.local_dns_port}
         call(["iptables", "-A", "OUTPUT", "-j", "REJECT"])
 
 
-if __name__ == "__main__":
+def main():
     if geteuid() != 0:
         print("[!] Needs to be run as root. Quitting")
         exit(1)
@@ -300,3 +296,6 @@ if __name__ == "__main__":
     else:
         # TODO: transient mode
         parser.print_help()
+
+if __name__ == "__main__":
+    main()

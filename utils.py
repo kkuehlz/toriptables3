@@ -1,8 +1,9 @@
 URI_TOR_CHECK = "https://check.torproject.org/"
 
 import re
-import requests
 from time import sleep
+
+import requests
 
 
 class Colors(object):
