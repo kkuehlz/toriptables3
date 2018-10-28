@@ -14,8 +14,15 @@ from os import devnull, geteuid
 from os.path import basename, isfile
 from pwd import getpwnam
 from signal import SIGINT, SIGTERM, sigwait
-from subprocess import (DEVNULL, PIPE, CalledProcessError, Popen, call,
-                        check_call, check_output)
+from subprocess import (
+    DEVNULL,
+    PIPE,
+    CalledProcessError,
+    Popen,
+    call,
+    check_call,
+    check_output,
+)
 from sys import stderr, stdout
 
 from utils import Colors, check_tor_connect
@@ -87,7 +94,6 @@ DNSPort {self.local_dns_port}
 
         @register
         def restart_tor():
-            fnull = open(devnull, "w")
             try:
                 status = check_call(
                     ["systemctl", "restart", "tor"], stdout=DEVNULL, stderr=DEVNULL
