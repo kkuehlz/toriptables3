@@ -13,7 +13,9 @@ from atexit import register
 from os import devnull, geteuid
 from os.path import basename, isfile
 from pwd import getpwnam
-from subprocess import DEVNULL, CalledProcessError, call, check_call
+from signal import SIGINT, SIGTERM, sigwait
+from subprocess import (DEVNULL, PIPE, CalledProcessError, Popen, call,
+                        check_call, check_output)
 from sys import stderr, stdout
 
 from utils import Colors, check_tor_connect
@@ -248,6 +250,53 @@ DNSPort {self.local_dns_port}
         call(["iptables", "-A", "OUTPUT", "-j", "REJECT"])
 
 
+def load(tor_iptables):
+    tor_iptables.load_iptables_rules()
+    print(f"  [{Colors.ORANGE}*{Colors.DEFAULT}] Getting public IP, please wait...")
+    public_ip = check_tor_connect()
+    if public_ip is None:
+        print(f" {Colors.ORANGE}[!]{Colors.DEFAULT} Can't get public ip address!")
+        exit(1)
+    print(
+        f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Your IP is {Colors.ORANGE}{public_ip}{Colors.DEFAULT}"
+    )
+    print(
+        f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[ON]{Colors.DEFAULT}"
+    )
+
+
+def flush(tor_iptables):
+    tor_iptables.flush_iptables_rules()
+    print(
+        f"  [{Colors.PINK}!{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[OFF]{Colors.DEFAULT}"
+    )
+
+
+def transient(tor_iptables):
+    SIGSET = frozenset({SIGINT, SIGTERM})
+
+    try:
+        old_rules = check_output(["iptables-save"])
+    except CalledProcessError as err:
+        print(f"  {Colors.ORANGE}[!] Could not save iptables rules{Colors.DEFAULT}")
+        print(f"  {Colors.ORANGE}[!] Command failed: {err.cmd}{Colors.DEFAULT}")
+
+    print(f"  [{Colors.PINK}+{Colors.DEFAULT}] iptables rules saved")
+    flush(tor_iptables)
+    load(tor_iptables)
+    sigwait(SIGSET)
+    p = Popen(["iptables-restore"], stdin=PIPE, stdout=DEVNULL, stderr=DEVNULL)
+    r = p.communicate(old_rules)
+    if p.returncode == 0:
+        print(f"  [{Colors.PINK}+{Colors.DEFAULT}] iptables rules restored")
+    else:
+        print(
+            f"  [{Colors.ORANGE}!{Colors.DEFAULT}] Could not restore iptables rules. Dumping to output!"
+        )
+        print(old_rules.decode())
+        exit(1)
+
+
 def main():
     if geteuid() != 0:
         print("[!] Needs to be run as root. Quitting")
@@ -274,28 +323,12 @@ def main():
     tor_iptables.mod_config()
 
     if args.load:
-        tor_iptables.load_iptables_rules()
-        print(f"  [{Colors.ORANGE}*{Colors.DEFAULT}] Getting public IP, please wait...")
-        public_ip = check_tor_connect()
-        if public_ip is None:
-            print(f" {Colors.ORANGE}[!]{Colors.DEFAULT} Can't get public ip address!")
-            exit(1)
-        print(
-            f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Your IP is {Colors.ORANGE}{public_ip}\033[0m"
-        )
-        print(
-            f"  [{Colors.ORANGE}+{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[ON]{Colors.DEFAULT}"
-        )
+        load(tor_iptables)
     elif args.flush:
-        tor_iptables.flush_iptables_rules()
-
-        print(
-            f"  [{Colors.PINK}!{Colors.DEFAULT}] Anonymizer status {Colors.ORANGE}[OFF]{Colors.DEFAULT}"
-        )
-
+        flush(tor_iptables)
     else:
-        # TODO: transient mode
-        parser.print_help()
+        transient(tor_iptables)
+
 
 if __name__ == "__main__":
     main()
