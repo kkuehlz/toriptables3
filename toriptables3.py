@@ -18,20 +18,12 @@ from subprocess import call, check_call, CalledProcessError
 from subprocess import DEVNULL
 from sys import stdout, stderr
 
-from requests import ConnectionError
-from requests import get
-from time import sleep
+from utils import Colors
+from utils import check_tor_connect
+
 
 NAME = "toriptables3"
 VERSION = "0.0.1"
-
-URI_TOR_CHECK = "https://check.torproject.org/"
-
-
-class Colors(object):
-    DEFAULT = "\033[0m"
-    ORANGE = "\033[91m"
-    PINK = "\033[92m"
 
 
 class TorIptables(object):
@@ -89,7 +81,6 @@ DNSPort {self.local_dns_port}
                 tor_conf.write(torrc_iptables_rules)
 
     def flush_iptables_rules(self):
-        """Flush iptables rules and NAT rules"""
         call(["iptables", "-F"])
         call(["iptables", "-t", "nat", "-F"])
 
@@ -260,38 +251,6 @@ DNSPort {self.local_dns_port}
         )
         call(["iptables", "-A", "OUTPUT", "-j", "REJECT"])
 
-    def check_tor_connect(self):
-        connected_msg = "Congratulations. This browser is configured to use Tor."
-        retries = 0
-        my_public_ip = None
-        while retries < 12:
-            try:
-                r = get(URI_TOR_CHECK)
-                if r.status_code == 200 and any(
-                    [connected_msg in line for line in r.text.splitlines()]
-                ):
-                    ip = filter(lambda x: "IP" in x, r.text.splitlines())
-                    my_public_ip = next(ip, None)
-                    break
-            except ConnectionError:
-                pass
-            print(f" [{Colors.PINK}?{Colors.DEFAULT}] Still waiting for IP address...")
-            sleep(3)
-            retries += 1
-
-        return my_public_ip
-        if not my_public_ip:
-            my_public_ip = getoutput("wget -qO - v4.ifconfig.co")
-        if not my_public_ip:
-            exit(" \033[91m[!]\033[0m Can't get public ip address!")
-        print(
-            " {0}".format(
-                "[Colors.ORANGE+\033[0m] Your IP is Colors.ORANGE%s\033[0m"
-                % my_public_ip
-            )
-        )
-        pass
-
 
 if __name__ == "__main__":
     if geteuid() != 0:
@@ -321,7 +280,7 @@ if __name__ == "__main__":
     if args.load:
         tor_iptables.load_iptables_rules()
         print(f"  [{Colors.ORANGE}*{Colors.DEFAULT}] Getting public IP, please wait...")
-        public_ip = tor_iptables.check_tor_connect()
+        public_ip = check_tor_connect()
         if public_ip is None:
             print(f" {Colors.ORANGE}[!]{Colors.DEFAULT} Can't get public ip address!")
             exit(1)
